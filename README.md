@@ -161,6 +161,8 @@ Verifies a submitted presentation without requiring a stored share token.
 - Audit events for auth, issue, share, and verification actions.
 - No full credential is returned to public verifier endpoints.
 
+Audit note: `npm audit --omit=dev --omit=optional --audit-level=high` passes. A full audit currently reports a moderate PostCSS advisory from Next's pinned nested dependency and high findings in MATTR's optional native BBS dependency chain. The app sets `BBS_SIGNATURES_MODE=WASM`; production deployment should keep WASM mode unless the native package is patched.
+
 ## Tests
 
 Run all tests:
