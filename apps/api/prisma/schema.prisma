@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CredentialStatus {
+  ACTIVE
+  REVOKED
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  credentials  Credential[]
+  shares       Share[]
+}
+
+model Credential {
+  id                 String           @id @default(cuid())
+  ownerId            String
+  owner              User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  encryptedPayload   String
+  signatureBase64Url String
+  issuerKeyId        String
+  schemaVersion      String
+  status             CredentialStatus @default(ACTIVE)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  shares             Share[]
+
+  @@index([ownerId])
+}
+
+model Share {
+  id               String    @id @default(cuid())
+  credentialId     String
+  credential       Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  ownerId          String
+  owner            User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  tokenHash        String    @unique
+  presentationJson Json
+  revealedFields   String[]
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  verificationCount Int      @default(0)
+  createdAt        DateTime  @default(now())
+
+  @@index([credentialId])
+  @@index([ownerId])
+}
+
+model AuditEvent {
+  id            String   @id @default(cuid())
+  actorId       String?
+  eventType     String
+  ipHash        String?
+  userAgentHash String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([actorId])
+  @@index([eventType])
+}
