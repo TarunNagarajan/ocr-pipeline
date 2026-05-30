@@ -1,59 +1,48 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-enum CredentialStatus {
-  ACTIVE
-  REVOKED
-}
-
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
+  id           String              @id @default(cuid())
+  email        String              @unique
   passwordHash String
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  credentials  Credential[]
-  shares       Share[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  documents    ProcessedDocument[]
 }
 
-model Credential {
-  id                 String           @id @default(cuid())
-  ownerId            String
-  owner              User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  encryptedPayload   String
-  signatureBase64Url String
-  issuerKeyId        String
-  schemaVersion      String
-  status             CredentialStatus @default(ACTIVE)
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  shares             Share[]
+model ProcessedDocument {
+  id              String   @id @default(cuid())
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  fileName        String
+  mimeType        String
+  sizeBytes       Int
+  sha256          String
+  storedPath      String
+  previewPath     String?
+  status          String   @default("UPLOADED")
+  progress        Int      @default(0)
+  stageLabel      String   @default("Uploaded")
+  pageCount       Int      @default(1)
+  documentType    String   @default("unknown")
+  reviewBand      String   @default("needs_review")
+  summaryLine     String   @default("Awaiting processing")
+  qualityJson     String?
+  encryptedResult String?
+  warningsJson    String?
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  @@index([ownerId])
-}
-
-model Share {
-  id               String    @id @default(cuid())
-  credentialId     String
-  credential       Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
-  ownerId          String
-  owner            User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  tokenHash        String    @unique
-  presentationJson Json
-  revealedFields   String[]
-  expiresAt        DateTime
-  revokedAt        DateTime?
-  verificationCount Int      @default(0)
-  createdAt        DateTime  @default(now())
-
-  @@index([credentialId])
-  @@index([ownerId])
+  @@index([ownerId, createdAt])
+  @@index([ownerId, status])
 }
 
 model AuditEvent {
@@ -62,7 +51,7 @@ model AuditEvent {
   eventType     String
   ipHash        String?
   userAgentHash String?
-  metadata      Json?
+  metadata      String?
   createdAt     DateTime @default(now())
 
   @@index([actorId])

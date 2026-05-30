@@ -16,14 +16,14 @@ declare global {
   }
 }
 
-const cookieName = "credential_session";
+const cookieName = "document_session";
 
 export function signSession(user: AuthUser): string {
   return jwt.sign(user, config.JWT_SECRET, {
     algorithm: "HS256",
     expiresIn: "2h",
-    issuer: "secure-credential-sharing",
-    audience: "secure-credential-holder"
+    issuer: "credential-lens",
+    audience: "credential-lens-user"
   });
 }
 
@@ -33,6 +33,15 @@ export function setSessionCookie(res: Response, token: string) {
     secure: isProduction,
     sameSite: "lax",
     maxAge: 2 * 60 * 60 * 1000,
+    path: "/"
+  });
+}
+
+export function clearSessionCookie(res: Response) {
+  res.clearCookie(cookieName, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
     path: "/"
   });
 }
@@ -47,8 +56,8 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   try {
     req.user = jwt.verify(token, config.JWT_SECRET, {
       algorithms: ["HS256"],
-      issuer: "secure-credential-sharing",
-      audience: "secure-credential-holder"
+      issuer: "credential-lens",
+      audience: "credential-lens-user"
     }) as AuthUser;
     return next();
   } catch {

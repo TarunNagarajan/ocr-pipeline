@@ -4,7 +4,7 @@ import express from "express";
 import helmet from "helmet";
 import pinoHttpModule from "pino-http";
 import { authRouter } from "./routes/auth.routes.js";
-import { credentialRouter } from "./routes/credential.routes.js";
+import { documentRouter } from "./routes/document.routes.js";
 import { config } from "./config.js";
 import { errorHandler } from "./errors.js";
 
@@ -28,7 +28,7 @@ export function createApp() {
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
   app.use("/api/auth", authRouter);
-  app.use("/api", credentialRouter);
+  app.use("/api", documentRouter);
   app.use(errorHandler);
 
   return app;

@@ -1,8 +1,9 @@
 import argon2 from "argon2";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
+import { resolveActor } from "../actor.js";
 import { audit } from "../audit.js";
-import { setSessionCookie, signSession } from "../auth.js";
+import { clearSessionCookie, requireAuth, setSessionCookie, signSession } from "../auth.js";
 import { HttpError } from "../errors.js";
 import { prisma } from "../prisma.js";
 import { loginSchema, registerSchema } from "../validators.js";
@@ -59,3 +60,30 @@ authRouter.post("/login", async (req, res, next) => {
   }
 });
 
+authRouter.get("/me", async (req, res, next) => {
+  try {
+    const user = await resolveActor(req);
+    if (!req.user) {
+      setSessionCookie(res, signSession(user));
+    }
+    res.json({ user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.get("/demo", async (req, res, next) => {
+  try {
+    const user = await resolveActor(req);
+    setSessionCookie(res, signSession(user));
+    res.json({ user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post("/logout", requireAuth, async (req, res) => {
+  await audit(req, "auth.logout", req.user?.id);
+  clearSessionCookie(res);
+  res.status(204).send();
+});

@@ -1,5 +1,5 @@
 {
-  "name": "@secure-credential/crypto",
+  "name": "@credential-lens/pipeline",
   "version": "0.1.0",
   "description": "",
   "main": "dist/index.js",
@@ -13,8 +13,7 @@
   "type": "module",
   "types": "dist/index.d.ts",
   "dependencies": {
-    "@mattrglobal/bbs-signatures": "^2.0.0",
-    "@stablelib/random": "^2.0.1",
+    "@credential-lens/types": "^0.1.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

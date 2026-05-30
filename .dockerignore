@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.git
+.next
+coverage
+.local-postgres
+.gcloud-sdk
+.gcloud-sdk-py
+.tmp-auth
+storage
+apps/api/prisma/*.db
+tmp-*.pdf
+*.log
+google-cloud-cli-windows-x86_64.zip

@@ -1,35 +1,97 @@
-# Secure Credential Sharing Module
+# Credential Lens
 
-Production-grade implementation of the internship assessment Problem 1: selective disclosure and verification for digital credentials.
+Credential Lens is the completed Problem 2 implementation in this workspace: an OCR and structured extraction system for credential-style PDFs, PNGs, and JPEGs. The app is intentionally running in an auth-free demo mode right now so the intake and viewer workflow can be exercised without login friction. The backend still keeps the session and audit primitives in place, but the visible product path is a dark, Obsidian-like document vault with a Firefox-style viewer surface for processed files.
 
-The system lets a holder issue a signed credential, reveal only selected fields, and give a verifier a public link or QR code. The verifier sees only the disclosed fields and validates a BBS+ selective-disclosure proof over BLS12-381.
+## What the system does
 
-## Architecture
+The browser uploads a document to the Express API. The API stores the original file on disk, extracts text from born-digital PDFs through `pdfjs-dist`, falls back to OCR for scanned PDFs when Poppler is available, runs OCR on images with `tesseract.js`, builds evidence blocks, structures holder and credential fields, computes review bands, encrypts the structured result, and exposes that payload back to the frontend for inspection.
 
-- `apps/web`: Next.js, TypeScript, Tailwind frontend.
-- `apps/api`: Express, TypeScript, Prisma API.
-- `packages/crypto`: BBS+ signing, proof derivation, proof verification, canonicalization helpers.
-- `packages/types`: shared credential and verification types.
-- Database: PostgreSQL, intended for Neon locally or in production.
+The extracted result shape includes:
 
-Credential data is encrypted at rest with AES-256-GCM. Passwords are hashed with Argon2id. Sessions use JWTs in HTTP-only cookies. Verification endpoints are public but rate-limited.
+- holder name, father name, and date of birth
+- credential degree, institution, graduation year, and CGPA
+- issuer name
+- field-level confidence
+- raw OCR text
+- evidence blocks
+- review-band summary and quality notes
 
-## Selective Disclosure Design
+The design principle is simple: OCR and text-layer evidence remain the source of truth. Any model-based reasoning is optional and bounded to that evidence.
 
-This project uses `@mattrglobal/bbs-signatures` for real multi-message BBS+ signatures.
+## Runtime shape
 
-When a credential is issued, the backend canonicalizes each metadata and claim field into deterministic signed messages. The issuer signs the full message set once. When the holder shares a credential, the backend derives a proof that reveals only mandatory metadata and the selected fields. Hidden fields are not included in the presentation or verifier response.
+The frontend runs on `http://localhost:3000`. The API runs on `http://localhost:4000`.
 
-Verifier checks include:
+The frontend experience is split into two main routes:
 
-- Share token exists and is not expired or revoked.
-- BBS+ proof verifies against the issuer public key.
-- Displayed disclosed field values match the signed revealed messages.
-- Tampered proof bytes or changed field values fail verification.
+- `/documents` for intake, history, and workspace overview
+- `/documents/:id` for the Firefox-style viewer and structured extraction report
 
-This is intentionally stronger than filtering JSON. Filtering is only used after proof derivation for display.
+The backend exposes:
 
-## Local Setup
+- `GET /health`
+- `POST /api/documents/process`
+- `GET /api/documents`
+- `GET /api/documents/:id/status`
+- `GET /api/documents/:id/result`
+- `GET /api/documents/:id/file`
+- `GET /api/documents/stream`
+
+There are still auth endpoints under `/api/auth`, but the current product flow does not require them. The API resolves a shared demo actor automatically when document routes are used.
+
+## Storage and persistence
+
+This build uses SQLite by default for local development through Prisma. The database lives at `apps/api/prisma/dev.db` when `DATABASE_URL=file:./dev.db`.
+
+Original uploads are stored under `STORAGE_ROOT`. The default local value is `./storage`, which resolves relative to `apps/api`.
+
+Structured extraction payloads are encrypted before they are written to the database. Raw uploads remain private and are only streamed back through the API.
+
+## PDF and OCR behavior
+
+Born-digital PDFs use direct text extraction first. That path is fast and keeps line structure so field extraction remains clean.
+
+If a PDF does not yield enough text, the API attempts scanned-PDF OCR by rasterizing pages with `pdftoppm` and then running `tesseract.js`. If Poppler is not installed, scanned PDFs fail explicitly with a clear error message instead of pretending to succeed.
+
+PNG and JPEG files go directly through the OCR path.
+
+## Environment variables
+
+Copy `.env.example` to `.env`.
+
+Important variables:
+
+- `PORT=4000`
+- `DATABASE_URL=file:./dev.db`
+- `WEB_ORIGIN=http://localhost:3000`
+- `API_PUBLIC_URL=http://localhost:4000`
+- `NEXT_PUBLIC_API_URL=http://localhost:4000`
+- `JWT_SECRET=...`
+- `DOCUMENT_ENCRYPTION_KEY=...`
+- `STORAGE_ROOT=./storage`
+- `MAX_UPLOAD_MB=10`
+- `LLM_MODE=none`
+
+Optional OpenAI-compatible adjudication variables are only used when `LLM_MODE=openai-compatible`:
+
+- `OPENAI_COMPAT_BASE_URL`
+- `OPENAI_COMPAT_MODEL`
+- `OPENAI_COMPAT_API_KEY`
+
+The default and recommended mode for sensitive documents is still `LLM_MODE=none`.
+
+Optional Vertex AI variables are used when `LLM_MODE=vertex-ai` or `VLM_MODE=vertex-ai`:
+
+- `STORAGE_BACKEND=gcs`
+- `GCS_BUCKET`
+- `GOOGLE_CLOUD_PROJECT`
+- `GOOGLE_CLOUD_LOCATION=global`
+- `VERTEX_LLM_MODEL=gemini-2.5-flash`
+- `VERTEX_VLM_MODEL=gemini-2.5-flash`
+
+The deployed cloud path uses Gemini 2.5 Flash twice: once as a text-only evidence adjudicator, and once as a multimodal validator over the original document bytes or `gs://` object.
+
+## Local setup
 
 Install dependencies:
 
@@ -37,179 +99,74 @@ Install dependencies:
 npm install
 ```
 
-Generate demo secrets:
+Generate the Prisma client:
 
 ```bash
-npm run keys -w apps/api
+npm run prisma:generate -w apps/api
 ```
 
-Copy `.env.example` to `.env` and paste generated values. Start PostgreSQL with Docker if available:
+Initialize the local SQLite schema:
 
 ```bash
-docker compose up -d
+npm run db:init -w apps/api
 ```
 
-Apply the schema:
+Start the API:
 
 ```bash
-npm run prisma:migrate -w apps/api
+npm run dev -w apps/api
 ```
 
-Run both apps:
+Start the frontend in a second terminal:
 
 ```bash
-npm run dev
+npm run dev -w apps/web
 ```
 
-Open `http://localhost:3000`. The API runs on `http://localhost:4000`.
+Then open `http://localhost:3000/documents`.
 
-## Environment Variables
+## Docker
 
-- `DATABASE_URL`: PostgreSQL connection string.
-- `WEB_ORIGIN`: frontend origin allowed by CORS.
-- `API_PUBLIC_URL`: public API URL.
-- `NEXT_PUBLIC_API_URL`: browser-facing API URL.
-- `JWT_SECRET`: at least 32 random bytes.
-- `CREDENTIAL_ENCRYPTION_KEY`: 32-byte base64url key preferred.
-- `ISSUER_KEY_ID`: stable issuer key identifier.
-- `ISSUER_NAME`: demo issuer display name.
-- `ISSUER_PUBLIC_KEY_BASE64URL`: BLS12-381 issuer public key.
-- `ISSUER_SECRET_KEY_BASE64URL`: BLS12-381 issuer private key.
-- `BBS_SIGNATURES_MODE`: set to `WASM` for portable deployment.
+`docker-compose.yml` now reflects the local SQLite demo shape. It runs only the API and web services, mounts the workspace, initializes the local SQLite file, and persists uploaded files under a Docker volume.
 
-## API
+Use:
 
-### Authentication
-
-`POST /api/auth/register`
-
-```json
-{ "email": "holder@example.com", "password": "minimum10chars" }
+```bash
+docker compose up --build
 ```
 
-`POST /api/auth/login`
+## Tests and build
 
-```json
-{ "email": "holder@example.com", "password": "minimum10chars" }
-```
-
-### Credential Management
-
-`POST /api/credentials/issue`
-
-Requires auth cookie.
-
-```json
-{
-  "claims": {
-    "name": "Asha Rao",
-    "degree": "B.Tech Computer Science",
-    "graduationYear": "2026",
-    "cgpa": "8.9",
-    "marks": "891/1000",
-    "issuerName": "Open Campus University",
-    "issueDate": "2026-05-01"
-  }
-}
-```
-
-`GET /api/credentials`
-
-Returns credentials belonging to the logged-in holder.
-
-### Selective Sharing
-
-`POST /api/credentials/share`
-
-Requires auth cookie.
-
-```json
-{
-  "credentialId": "credential-id",
-  "fields": ["name", "degree", "graduationYear"],
-  "ttlHours": 24
-}
-```
-
-Returns a public link, expiry timestamp, token, and verifiable presentation.
-
-### Verification
-
-`GET /api/shares/:token`
-
-Public endpoint used by the verifier page. Returns the presentation and verification result.
-
-`POST /api/credentials/verify`
-
-```json
-{ "presentation": {} }
-```
-
-Verifies a submitted presentation without requiring a stored share token.
-
-## Security Controls
-
-- Argon2id password hashing.
-- JWT sessions stored in HTTP-only cookies.
-- CORS allowlist with credential support.
-- Helmet security headers.
-- Request size limits.
-- Zod validation on all payloads.
-- Rate limits on auth and verification endpoints.
-- AES-256-GCM encryption for full credential payloads.
-- Token hashes stored instead of raw share tokens.
-- Audit events for auth, issue, share, and verification actions.
-- No full credential is returned to public verifier endpoints.
-
-Audit note: `npm audit --omit=dev --omit=optional --audit-level=high` passes. A full audit currently reports a moderate PostCSS advisory from Next's pinned nested dependency and high findings in MATTR's optional native BBS dependency chain. The app sets `BBS_SIGNATURES_MODE=WASM`; production deployment should keep WASM mode unless the native package is patched.
-
-## Tests
-
-Run all tests:
+Run the current automated tests:
 
 ```bash
 npm test
 ```
 
-The crypto tests cover:
+Build the workspaces:
 
-- Full credential signature verification.
-- Selective disclosure proof verification.
-- Hidden field non-disclosure.
-- Tampered disclosed field rejection.
+```bash
+npm run build
+```
 
-## Deployment
+## Deployment direction
 
-Recommended free deployment:
+The repository now includes a working Google Cloud deployment path:
 
-- Frontend: Vercel.
-- Backend: Render web service.
-- Database: Neon PostgreSQL.
+- `apps/api/Dockerfile`
+- `apps/web/Dockerfile`
+- `cloudbuild.api.yaml`
+- `cloudbuild.web.yaml`
 
-Deploy steps:
+The current deployed shape is:
 
-1. Create a Neon database and copy `DATABASE_URL`.
-2. Deploy `apps/api` on Render with build command `npm install && npm run build -w packages/types && npm run build -w packages/crypto && npm run build -w apps/api` and start command `npm run start -w apps/api`.
-3. Set API environment variables on Render.
-4. Deploy `apps/web` on Vercel with `NEXT_PUBLIC_API_URL` set to the Render API URL.
-5. Set `WEB_ORIGIN` on Render to the Vercel URL.
-6. Run Prisma migration against Neon before demo.
+- Cloud Run service for the API
+- Cloud Run service for the web app
+- Cloud Storage bucket for uploaded originals
+- Vertex AI Gemini 2.5 Flash for evidence adjudication and multimodal document validation
 
-## Demo Script
+The current compromise is persistence. The API still uses SQLite inside the container, so the Cloud Run deployment is intentionally single-instance and demo-grade. That is enough to prove the OCR, LLM, and VLM paths on GCP, but it is not the correct long-term persistence layer. The next production step is to move metadata off SQLite and onto Postgres or Cloud SQL.
 
-1. Explain why Problem 1 was chosen: deterministic security depth, privacy, and assessable cryptography.
-2. Register as a holder.
-3. Issue a credential with private fields such as CGPA and marks.
-4. Share only name, degree, and graduation year.
-5. Open the QR/public link and show that hidden fields are absent.
-6. Explain the BBS+ proof flow and why tampering fails.
-7. Show tests proving valid and tampered proof behavior.
+## What I would improve with more time
 
-## Improvements With More Time
-
-- Add KMS or HSM-backed issuer key custody.
-- Add issuer key rotation and revocation registry.
-- Add DID document resolution instead of static issuer keys.
-- Add holder-side wallet encryption using a passkey-derived key.
-- Add WebAuthn login and device-bound sessions.
-- Add formal OpenAPI generation and a hosted Swagger page.
+I would add page-aware evidence highlighting in the viewer, a stronger image preprocessing stage before OCR, richer conflict detection across pages, and a cloud worker split so OCR, reasoning, and API traffic scale independently instead of sharing one process boundary.

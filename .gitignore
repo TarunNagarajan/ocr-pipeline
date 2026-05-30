@@ -7,3 +7,7 @@ dist
 coverage
 *.log
 .local-postgres
+storage
+apps/api/prisma/*.db
+apps/api/storage
+.gcloud-sdk-py  

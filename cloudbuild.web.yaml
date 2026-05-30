@@ -1,0 +1,15 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "build",
+        "--build-arg",
+        "NEXT_PUBLIC_API_URL=${_NEXT_PUBLIC_API_URL}",
+        "-f",
+        "apps/web/Dockerfile",
+        "-t",
+        "asia-south1-docker.pkg.dev/$PROJECT_ID/ocr-platform/credential-lens-web:$BUILD_ID",
+        "."
+      ]
+images:
+  - asia-south1-docker.pkg.dev/$PROJECT_ID/ocr-platform/credential-lens-web:$BUILD_ID

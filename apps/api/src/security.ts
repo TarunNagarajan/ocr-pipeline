@@ -2,11 +2,11 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { config } from "./config.js";
 
 function encryptionKey(): Buffer {
-  const decoded = Buffer.from(config.CREDENTIAL_ENCRYPTION_KEY, "base64url");
+  const decoded = Buffer.from(config.DOCUMENT_ENCRYPTION_KEY, "base64url");
   if (decoded.length === 32) {
     return decoded;
   }
-  return createHash("sha256").update(config.CREDENTIAL_ENCRYPTION_KEY).digest();
+  return createHash("sha256").update(config.DOCUMENT_ENCRYPTION_KEY).digest();
 }
 
 export function encryptJson(value: unknown): string {

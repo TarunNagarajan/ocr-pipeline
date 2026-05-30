@@ -1,29 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { issueCredentialSchema, shareCredentialSchema } from "./validators.js";
+import { loginSchema, registerSchema } from "./validators.js";
 
-describe("API validation", () => {
-  it("accepts a complete credential issue request", () => {
-    expect(() =>
-      issueCredentialSchema.parse({
-        claims: {
-          name: "Asha Rao",
-          degree: "B.Tech Computer Science",
-          graduationYear: "2026",
-          cgpa: "8.9",
-          marks: "891/1000",
-          issuerName: "Open Campus University",
-          issueDate: "2026-05-01"
-        }
-      })
-    ).not.toThrow();
+describe("auth validation", () => {
+  it("accepts a normalized registration payload", () => {
+    const parsed = registerSchema.parse({
+      email: "Asha@example.com",
+      password: "securepass1"
+    });
+
+    expect(parsed.email).toBe("asha@example.com");
   });
 
-  it("rejects invalid share fields and unsafe TTL values", () => {
+  it("rejects weak passwords", () => {
     expect(() =>
-      shareCredentialSchema.parse({
-        credentialId: "cred-1",
-        fields: ["name", "unknown"],
-        ttlHours: 999
+      loginSchema.parse({
+        email: "holder@example.com",
+        password: "short"
       })
     ).toThrow();
   });

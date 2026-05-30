@@ -1,76 +1,134 @@
-export const claimOrder = [
-  "name",
-  "degree",
-  "graduationYear",
-  "cgpa",
-  "marks",
-  "issuerName",
-  "issueDate"
-] as const;
+export type DocumentStatus =
+  | "UPLOADED"
+  | "TEXT_EXTRACTION"
+  | "OCR"
+  | "STRUCTURING"
+  | "VALIDATING"
+  | "COMPLETED"
+  | "FAILED";
 
-export type ClaimName = (typeof claimOrder)[number];
+export type DocumentType =
+  | "identity-document"
+  | "education-certificate"
+  | "marksheet"
+  | "professional-certificate"
+  | "unknown";
 
-export type CredentialClaims = Record<ClaimName, string>;
+export type ReviewBand = "auto_accept" | "needs_review" | "conflict" | "unsupported";
 
-export type CredentialStatus = "ACTIVE" | "REVOKED";
+export type EvidenceSource = "pdf-text" | "tesseract" | "summary";
 
-export type VerificationStatus = "VERIFIED" | "INVALID" | "EXPIRED" | "REVOKED";
+export type ExtractionSource =
+  | "label_match"
+  | "regex_match"
+  | "keyword_match"
+  | "document_summary"
+  | "llm_adjudication"
+  | "vlm_extraction"
+  | "consensus_match"
+  | "agentic_self_correction";
 
-export interface CredentialEnvelope {
-  schemaVersion: "credential-v1";
-  credentialId: string;
-  holderSubject: string;
-  issuerKeyId: string;
-  issuedAt: string;
-  nonce: string;
-  claims: CredentialClaims;
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
-export interface CredentialListItem {
+export interface EvidenceBlock {
   id: string;
-  issuerName: string;
-  issueDate: string;
-  degree: string;
-  graduationYear: string;
-  status: CredentialStatus;
-  availableFields: ClaimName[];
+  page: number;
+  text: string;
+  blockType: "line" | "paragraph" | "table-row";
+  source: EvidenceSource;
+  confidence: number | null;
+  bbox?: BoundingBox;
 }
 
-export interface DisclosedField {
-  name: ClaimName;
-  value: string;
-  trust: "cryptographically-bound";
+export interface QualityAssessment {
+  averageConfidence: number;
+  documentReadable: boolean;
+  lowSignal: boolean;
+  notes: string[];
 }
 
-export interface VerifiablePresentation {
-  type: "BbsSelectiveDisclosurePresentation";
-  schemaVersion: "presentation-v1";
-  credentialId: string;
-  issuerKeyId: string;
-  issuerName: string;
-  issueDate: string;
-  issuedAt: string;
-  credentialNonce: string;
-  createdAt: string;
-  expiresAt: string;
-  nonce: string;
-  presentationNonce: string;
-  revealedIndexes: number[];
-  disclosedFields: DisclosedField[];
-  proofBase64Url: string;
-  publicKeyBase64Url: string;
+export interface ExtractionField {
+  value: string | null;
+  normalizedValue: string | null;
+  confidence: number;
+  band: ReviewBand;
+  evidenceIds: string[];
+  spatialBboxes?: number[][];
+  page: number | null;
+  sources: ExtractionSource[];
+  reasoning: string[];
 }
 
-export interface VerificationResult {
-  status: VerificationStatus;
-  verified: boolean;
-  reason: string;
-  issuer: {
-    keyId: string;
-    name: string;
+export interface DynamicField extends ExtractionField {
+  label: string;
+  type: "string" | "date" | "number" | "boolean";
+  group: string;
+}
+
+export interface AuthenticityAnalysis {
+  isAuthentic: boolean;
+  score: number;
+  reasoning: string[];
+}
+
+export interface StructuredDocumentResult {
+  fields: Record<string, DynamicField>;
+  confidence: Record<string, number>;
+  rawText: string;
+  warnings: string[];
+  summary: {
+    documentType: DocumentType;
+    titleLines: string[];
+    repeatedEntities: string[];
+    reviewBand: ReviewBand;
   };
-  issueDate: string;
-  checkedAt: string;
-  disclosedFields: DisclosedField[];
-  proofType: "BBS+ selective disclosure proof over BLS12-381";
+  authenticity?: AuthenticityAnalysis;
+  evidence: EvidenceBlock[];
+  quality: QualityAssessment;
+}
+
+export interface DocumentListItem {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  status: DocumentStatus;
+  progress: number;
+  createdAt: string;
+  updatedAt: string;
+  documentType: DocumentType;
+  reviewBand: ReviewBand;
+  summaryLine: string;
+}
+
+export interface DocumentStatusPayload {
+  id: string;
+  status: DocumentStatus;
+  progress: number;
+  stageLabel: string;
+  errorMessage?: string | null;
+  systemMessage?: string | null;
+}
+
+export interface DocumentResultPayload extends DocumentStatusPayload {
+  fileName: string;
+  mimeType: string;
+  pageCount: number;
+  previewUrl: string;
+  result: StructuredDocumentResult | null;
+}
+
+export interface ProcessDocumentResponse {
+  id: string;
+  status: DocumentStatus;
+  progress: number;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
 }

@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { z } from "zod";
 import { config as loadEnv } from "dotenv";
 
@@ -10,13 +11,28 @@ const envSchema = z.object({
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
   API_PUBLIC_URL: z.string().url().default("http://localhost:4000"),
   JWT_SECRET: z.string().min(32),
-  CREDENTIAL_ENCRYPTION_KEY: z.string().min(32),
-  ISSUER_KEY_ID: z.string().min(1).default("did:example:university#bbs-key-1"),
-  ISSUER_NAME: z.string().min(1).default("Open Campus University"),
-  ISSUER_PUBLIC_KEY_BASE64URL: z.string().min(1),
-  ISSUER_SECRET_KEY_BASE64URL: z.string().min(1),
-  BBS_SIGNATURES_MODE: z.string().optional()
+  DOCUMENT_ENCRYPTION_KEY: z.string().min(32).optional(),
+  CREDENTIAL_ENCRYPTION_KEY: z.string().min(32).optional(),
+  STORAGE_ROOT: z.string().default(resolve(process.cwd(), "storage")),
+  STORAGE_BACKEND: z.enum(["local", "gcs"]).default("local"),
+  GCS_BUCKET: z.string().optional(),
+  MAX_UPLOAD_MB: z.coerce.number().int().positive().default(12),
+  LLM_MODE: z.enum(["none", "openai-compatible", "vertex-ai"]).default("none"),
+  VLM_MODE: z.enum(["none", "vertex-ai"]).default("none"),
+  OPENAI_COMPAT_BASE_URL: z.string().url().optional(),
+  OPENAI_COMPAT_MODEL: z.string().optional(),
+  OPENAI_COMPAT_API_KEY: z.string().optional(),
+  GOOGLE_CLOUD_PROJECT: z.string().optional(),
+  GOOGLE_CLOUD_LOCATION: z.string().default("global"),
+  VERTEX_LLM_MODEL: z.string().default("gemini-2.5-pro"),
+  VERTEX_VLM_MODEL: z.string().default("gemini-2.5-pro")
 });
 
-export const config = envSchema.parse(process.env);
+const parsed = envSchema.parse(process.env);
+
+export const config = {
+  ...parsed,
+  DOCUMENT_ENCRYPTION_KEY: parsed.DOCUMENT_ENCRYPTION_KEY ?? parsed.CREDENTIAL_ENCRYPTION_KEY ?? parsed.JWT_SECRET
+};
+
 export const isProduction = config.NODE_ENV === "production";

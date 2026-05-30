@@ -1,122 +1,110 @@
 import { describe, expect, it } from "vitest";
-import {
-  derivePresentationProof,
-  generateIssuerKeyPair,
-  signCredential,
-  verifyCredentialSignature,
-  verifyPresentationProof,
-  type BbsKeyPair,
-  fromBase64Url
-} from "./index.js";
-import type { CredentialEnvelope } from "@secure-credential/types";
+import { buildEvidenceFromText, buildStructuredResult, estimateQuality } from "./index.js";
 
-function sampleEnvelope(): CredentialEnvelope {
-  return {
-    schemaVersion: "credential-v1",
-    credentialId: "cred-test-1",
-    holderSubject: "holder-hash",
-    issuerKeyId: "did:example:issuer#key-1",
-    issuedAt: "2026-05-27T00:00:00.000Z",
-    nonce: "credential-nonce",
-    claims: {
-      name: "Asha Rao",
-      degree: "B.Tech Computer Science",
-      graduationYear: "2026",
-      cgpa: "8.9",
-      marks: "891/1000",
-      issuerName: "Open Campus University",
-      issueDate: "2026-05-01"
-    }
-  };
-}
+describe("document extraction pipeline", () => {
+  it("extracts education credential fields from labeled text", () => {
+    const rawText = [
+      "Open Campus University",
+      "Student Name: Asha Rao",
+      "Father Name: Raj Rao",
+      "Date of Birth: 14/04/2003",
+      "Degree: Bachelor of Technology in Computer Science",
+      "Graduation Year: 2026",
+      "CGPA: 8.9",
+      "Issued By: Open Campus University"
+    ].join("\n");
 
-describe("BBS+ selective disclosure", () => {
-  it("signs credentials and verifies selectively disclosed fields", async () => {
-    const keys = await generateIssuerKeyPair();
-    const keyPair: BbsKeyPair = {
-      publicKey: fromBase64Url(keys.publicKeyBase64Url),
-      secretKey: fromBase64Url(keys.secretKeyBase64Url)
-    };
-    const signed = await signCredential(sampleEnvelope(), keyPair);
-
-    await expect(
-      verifyCredentialSignature(sampleEnvelope(), signed.signatureBase64Url, keys.publicKeyBase64Url)
-    ).resolves.toBe(true);
-
-    const presentation = await derivePresentationProof({
-      envelope: sampleEnvelope(),
-      signatureBase64Url: signed.signatureBase64Url,
-      publicKeyBase64Url: keys.publicKeyBase64Url,
-      disclosedClaims: ["name", "degree", "graduationYear"],
-      createdAt: "2026-05-27T00:00:00.000Z",
-      expiresAt: "2026-05-28T00:00:00.000Z"
+    const evidence = buildEvidenceFromText(rawText);
+    const result = buildStructuredResult({
+      rawText,
+      evidence,
+      quality: estimateQuality(evidence, rawText)
     });
 
-    expect(presentation.disclosedFields.map((field) => field.name)).toEqual(["name", "degree", "graduationYear"]);
-    expect(JSON.stringify(presentation)).not.toContain("8.9");
-    await expect(verifyPresentationProof(presentation)).resolves.toBe(true);
+    expect(result.holder.name.value).toBe("Asha Rao");
+    expect(result.holder.dob.normalizedValue).toBe("2003-04-14");
+    expect(result.credential.degree.value).toContain("Bachelor of Technology");
+    expect(result.credential.year.value).toBe("2026");
+    expect(result.credential.cgpa.value).toBe("8.9");
+    expect(result.summary.documentType).toBe("education-certificate");
+    expect(result.summary.reviewBand).toBe("auto_accept");
   });
 
-  it("rejects tampered disclosed values", async () => {
-    const keys = await generateIssuerKeyPair();
-    const keyPair: BbsKeyPair = {
-      publicKey: fromBase64Url(keys.publicKeyBase64Url),
-      secretKey: fromBase64Url(keys.secretKeyBase64Url)
-    };
-    const envelope = sampleEnvelope();
-    const signed = await signCredential(envelope, keyPair);
-    const presentation = await derivePresentationProof({
-      envelope,
-      signatureBase64Url: signed.signatureBase64Url,
-      publicKeyBase64Url: keys.publicKeyBase64Url,
-      disclosedClaims: ["name"],
-      createdAt: "2026-05-27T00:00:00.000Z",
-      expiresAt: "2026-05-28T00:00:00.000Z"
-    });
+  it("marks sparse OCR output as low signal", () => {
+    const rawText = "ID";
+    const evidence = buildEvidenceFromText(rawText, "summary");
+    const quality = estimateQuality(evidence, rawText);
 
-    presentation.disclosedFields[0] = { ...presentation.disclosedFields[0], value: "Mallory" };
-    await expect(verifyPresentationProof(presentation)).resolves.toBe(false);
+    expect(quality.documentReadable).toBe(false);
+    expect(quality.lowSignal).toBe(true);
   });
 
-  it("rejects added fields that were not revealed in the proof", async () => {
-    const keys = await generateIssuerKeyPair();
-    const keyPair: BbsKeyPair = {
-      publicKey: fromBase64Url(keys.publicKeyBase64Url),
-      secretKey: fromBase64Url(keys.secretKeyBase64Url)
-    };
-    const envelope = sampleEnvelope();
-    const signed = await signCredential(envelope, keyPair);
-    const presentation = await derivePresentationProof({
-      envelope,
-      signatureBase64Url: signed.signatureBase64Url,
-      publicKeyBase64Url: keys.publicKeyBase64Url,
-      disclosedClaims: ["name"],
-      createdAt: "2026-05-27T00:00:00.000Z",
-      expiresAt: "2026-05-28T00:00:00.000Z"
+  it("downgrades low-signal model-only extraction to unsupported", () => {
+    const rawText = "———\n——\nBE";
+    const evidence = buildEvidenceFromText(rawText, "summary");
+    const result = buildStructuredResult({
+      rawText,
+      evidence,
+      quality: estimateQuality(evidence, rawText),
+      documentTypeOverride: "education-certificate",
+      llmOverrides: {
+        degree: "Bachelor of Technology in Computer Science",
+        institution: "Open Campus University",
+        year: "2024",
+        cgpa: "3.5"
+      }
     });
 
-    presentation.disclosedFields.push({ name: "degree", value: "Fake Degree", trust: "cryptographically-bound" });
-    await expect(verifyPresentationProof(presentation, keys.publicKeyBase64Url, "did:example:issuer#key-1")).resolves.toBe(false);
+    expect(result.summary.reviewBand).toBe("unsupported");
   });
 
-  it("rejects proofs signed by an untrusted public key", async () => {
-    const trusted = await generateIssuerKeyPair();
-    const attacker = await generateIssuerKeyPair();
-    const attackerPair: BbsKeyPair = {
-      publicKey: fromBase64Url(attacker.publicKeyBase64Url),
-      secretKey: fromBase64Url(attacker.secretKeyBase64Url)
-    };
-    const envelope = sampleEnvelope();
-    const signed = await signCredential(envelope, attackerPair);
-    const presentation = await derivePresentationProof({
-      envelope,
-      signatureBase64Url: signed.signatureBase64Url,
-      publicKeyBase64Url: attacker.publicKeyBase64Url,
-      disclosedClaims: ["name"],
-      createdAt: "2026-05-27T00:00:00.000Z",
-      expiresAt: "2026-05-28T00:00:00.000Z"
+  it("assigns lower default confidence to tesseract-derived text evidence", () => {
+    const evidence = buildEvidenceFromText("Student Name: Asha Rao", "tesseract");
+    expect(evidence[0]?.confidence).toBe(62);
+  });
+
+  it("handles identity-style documents without forcing academic fields", () => {
+    const rawText = [
+      "Government of India",
+      "Holder Name: Priya Menon",
+      "Father Name: Ravi Menon",
+      "Date of Birth: 09/09/2001",
+      "Issuing Authority: National Identity Office"
+    ].join("\n");
+
+    const evidence = buildEvidenceFromText(rawText);
+    const result = buildStructuredResult({
+      rawText,
+      evidence,
+      quality: estimateQuality(evidence, rawText)
     });
 
-    await expect(verifyPresentationProof(presentation, trusted.publicKeyBase64Url, "did:example:issuer#key-1")).resolves.toBe(false);
+    expect(result.summary.documentType).toBe("identity-document");
+    expect(result.holder.name.value).toBe("Priya Menon");
+    expect(result.credential.degree.value).toBeNull();
+    expect(result.issuer.name.value).toBe("National Identity Office");
+  });
+
+  it("handles professional certificates with non-academic labels", () => {
+    const rawText = [
+      "Certificate of Completion",
+      "Participant Name: Dev Sharma",
+      "Certification: Advanced Cloud Security Practitioner",
+      "Organization: Maruthi Labs Academy",
+      "Issued On: 12/03/2025",
+      "Certified By: Maruthi Labs Academy"
+    ].join("\n");
+
+    const evidence = buildEvidenceFromText(rawText);
+    const result = buildStructuredResult({
+      rawText,
+      evidence,
+      quality: estimateQuality(evidence, rawText)
+    });
+
+    expect(result.summary.documentType).toBe("professional-certificate");
+    expect(result.credential.degree.value).toContain("Advanced Cloud Security Practitioner");
+    expect(result.credential.institution.value).toContain("Maruthi Labs Academy");
+    expect(result.credential.cgpa.value).toBeNull();
   });
 });
