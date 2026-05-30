@@ -26,6 +26,7 @@ export interface ExtractedFieldInfo {
   value: string | null;
   type: "string" | "date" | "number" | "boolean";
   group: string;
+  bbox?: number[];
 }
 
 export interface BuildResultInput {

@@ -122,7 +122,7 @@ async function ocrImageBuffer(image: Buffer, page: number) {
   let evidence: EvidenceBlock[] =
     data.lines
       ?.map((line, index) => {
-        // Remove repetitive form blanks (e.g. "_____", "----") to prevent OCR noise
+        
         let text = line.text?.replace(/[_—-]{2,}/g, "").replace(/\s+/g, " ").trim();
         
         // Zero-latency heuristic to heal spaced-out kerning (e.g. "N O O B J E C T I O N C E RT I F I C AT E")
@@ -363,7 +363,7 @@ async function extractImageContent(buffer: Buffer) {
   try {
     await writeFile(inputPath, buffer);
     let pythonScript = resolve(__dirname, "scripts", "preprocess-image.py");
-    // Fallback if running from dist
+    
     if (pythonScript.includes("dist")) {
       pythonScript = pythonScript.replace("dist", "src");
     }
@@ -433,7 +433,7 @@ async function processDocument(documentId: string) {
     const secondaryFieldMap = new Map(secondaryFields.map((f) => [f.key, f]));
 
     const mergedFields = [...primaryFields];
-    // Add any fields that the secondary model found but primary missed
+    
     for (const sField of secondaryFields) {
       if (!primaryFieldMap.has(sField.key)) {
         mergedFields.push(sField);

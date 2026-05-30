@@ -35,6 +35,11 @@
   --viewer-toolbar-height: 42px;
   --font-ui: var(--font-geist-sans), "Inter", "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono), "JetBrains Mono", monospace;
+  --bottom-nav-height: 56px;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
 }
 
 * {
@@ -127,4 +132,231 @@ pre {
 .viewer-toolbar-button:hover {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-primary);
+}
+
+/* ── Mobile / Capacitor-native responsive overrides ──
+ * These only apply on small viewports or in the native app.
+ * The desktop web build is completely unaffected.
+ */
+
+/* Tablet and below: switch to bottom nav + overlay sidebar */
+@media (max-width: 768px) {
+  :root {
+    --viewer-toolbar-height: 38px;
+  }
+
+  /* ── Bottom navigation bar ── */
+  .app-shell-nav-desktop {
+    display: none !important;
+  }
+
+  .app-shell-nav-bottom {
+    display: flex !important;
+    height: var(--bottom-nav-height);
+  }
+
+  /* ── Sidebar becomes a slide-up drawer ── */
+  .app-shell-sidebar {
+    position: fixed !important;
+    inset: auto 0 0 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: min(85vh, 480px) !important;
+    z-index: 200 !important;
+    border-radius: 16px 16px 0 0 !important;
+    border-right: none !important;
+    border-top: 1px solid var(--border-subtle) !important;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5) !important;
+    transition: transform 0.35s cubic-bezier(0.32, 0, 0.24, 1) !important;
+    overflow-y: auto !important;
+  }
+
+  .app-shell-sidebar.app-shell-sidebar--hidden {
+    transform: translateY(100%);
+    pointer-events: none;
+  }
+
+  /* Drag handle for the sidebar drawer */
+  .app-shell-sidebar::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.12);
+    z-index: 1;
+  }
+
+  /* ── Sidebar backdrop ── */
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  /* ── Main content ── */
+  .app-shell-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+    padding-bottom: var(--bottom-nav-height) !important;
+  }
+
+  /* ── Bottom nav button styling ── */
+  .bottom-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    height: var(--bottom-nav-height);
+    padding: 4px 0;
+    color: var(--text-muted);
+    transition: color 150ms ease;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    outline: none;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .bottom-nav-btn:active {
+    opacity: 0.7;
+  }
+
+  .bottom-nav-btn.active {
+    color: var(--accent-text);
+  }
+
+  .bottom-nav-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .bottom-nav-btn span {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  /* ── Viewer toolbar compact ── */
+  .viewer-toolbar-button {
+    height: 34px !important;
+    min-width: 34px !important;
+    border-radius: 8px !important;
+  }
+
+  .viewer-toolbar-button:active {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+  }
+
+  .viewer-zoom-label {
+    font-size: 11px !important;
+    padding: 2px 8px !important;
+  }
+
+  /* ── Touch-friendly targets ── */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* ── Document table → card list ── */
+  .docs-table {
+    display: none !important;
+  }
+
+  .docs-cards {
+    display: grid !important;
+  }
+
+  /* ── Hide viewer action buttons that aren't essential on phone ── */
+  .viewer-action-desktop {
+    display: none !important;
+  }
+
+  /* ── Floating upload button ── */
+  .fab-upload {
+    display: flex !important;
+  }
+}
+
+/* Small phone: even tighter */
+@media (max-width: 480px) {
+  .app-shell-sidebar {
+    height: min(90vh, 440px) !important;
+  }
+
+  .bottom-nav-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .bottom-nav-btn span {
+    font-size: 8px;
+  }
+}
+
+/* Desktop: hide bottom nav */
+@media (min-width: 769px) {
+  .app-shell-nav-bottom {
+    display: none !important;
+  }
+
+  .docs-cards {
+    display: none !important;
+  }
+
+  .fab-upload {
+    display: none !important;
+  }
+}
+
+/* Capacitor native app: respect safe areas */
+.capacitor {
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
+}
+
+.capacitor .app-shell-content {
+  padding-bottom: calc(var(--bottom-nav-height) + var(--safe-area-bottom));
+}
+
+.capacitor .app-shell-nav-bottom {
+  padding-bottom: var(--safe-area-bottom);
+  height: calc(var(--bottom-nav-height) + var(--safe-area-bottom));
+}
+
+/* Disable text selection in native app for more native feel */
+.capacitor * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.capacitor input,
+.capacitor textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Smooth native scrolling */
+.capacitor .custom-scrollbar {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent pull-to-refresh in Capacitor WebView */
+.capacitor body {
+  overscroll-behavior: none;
 }

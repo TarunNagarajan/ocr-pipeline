@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { FilePlus2, Files, RefreshCcw, ScanSearch, Sparkles, Activity, AlertCircle } from "lucide-react";
+import { FilePlus2, Files, RefreshCcw, ScanSearch, Sparkles, Activity, AlertCircle, Upload } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ReviewBandBadge, StatusBadge } from "@/components/document-primitives";
 import { api } from "@/lib/api";
@@ -280,7 +280,43 @@ export default function DocumentsPage() {
           </header>
 
           <div className="overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-app)] shadow-sm">
-            <table className="w-full text-left text-sm">
+            {}
+          <div className="docs-cards grid gap-3">
+            {documents.map((document) => (
+              <Link
+                key={document.id}
+                href={`/documents/${document.id}`}
+                className="block rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4 hover:border-[var(--accent-text)] active:border-[var(--accent-text)] transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-[var(--surface-muted)] p-2 text-[var(--text-subtle)] shrink-0">
+                    <Files className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm truncate">{document.fileName}</p>
+                    <p className="mt-0.5 text-xs text-[var(--text-subtle)] truncate">
+                      {documentTypeLabel(document.documentType)}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <StatusBadge status={document.status} />
+                      <ReviewBandBadge band={document.reviewBand} />
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">
+                      {formatDateTime(document.updatedAt)}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+            {!loading && documents.length === 0 ? (
+              <div className="col-span-full px-3 py-6 text-sm text-[var(--text-subtle)] text-center">
+                No documents yet. Upload one to start the workspace.
+              </div>
+            ) : null}
+          </div>
+
+          {}
+          <table className="docs-table w-full text-left text-sm">
               <thead className="border-b border-[var(--border-subtle)] bg-[var(--surface-panel)] text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
                 <tr>
                   <th className="px-6 py-4 font-semibold">Document</th>
@@ -355,9 +391,20 @@ export default function DocumentsPage() {
           </div>
         ) : null}
       </div>
+
+      {}
+      <label className="fab-upload fixed bottom-[72px] right-6 z-50 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-[var(--accent-strong)] text-white shadow-lg shadow-[var(--accent-strong)]/30 transition-all duration-200 active:scale-90 hover:shadow-xl" title="Upload document">
+        <Upload className="h-6 w-6" />
+        <input
+          className="hidden"
+          type="file"
+          multiple
+          disabled={uploading}
+          accept=".pdf,image/png,image/jpeg"
+          onChange={onFileChange}
+        />
+      </label>
     </AppShell>
   );
 }
-
-
 

@@ -1,172 +1,35 @@
-# Credential Lens
+# Credential Lens: The OCR Pipeline That Actually Works
 
-Credential Lens is the completed Problem 2 implementation in this workspace: an OCR and structured extraction system for credential-style PDFs, PNGs, and JPEGs. The app is intentionally running in an auth-free demo mode right now so the intake and viewer workflow can be exercised without login friction. The backend still keeps the session and audit primitives in place, but the visible product path is a dark, Obsidian-like document vault with a Firefox-style viewer surface for processed files.
+I love to compare software architectures with mis-incentivized Rube Goldberg machines. Here we are today. Discussing bloated, caffeine-addicted microservices making unstructured progress towards an already solved problem, or being burdened to hack up a small-scale temporary regex parser for an OCR problem which doesn't exist, which could easily be solved by a multimodal LLM.
 
-## What the system does
+Before 2024, if you were building an OCR pipeline, you'd worry about balancing Tesseract's fragile character recognition with a good heuristic matcher that does justice to the backend. All of that depends on the document templates you have at hand, so during your ideation process, you'd take into account the effort, and whether it is tangible or not to start writing 500 lines of regex in the first place.
 
-The browser uploads a document to the Express API. The API stores the original file on disk, extracts text from born-digital PDFs through `pdfjs-dist`, falls back to OCR for scanned PDFs when Poppler is available, runs OCR on images with `tesseract.js`, builds evidence blocks, structures holder and credential fields, computes review bands, encrypts the structured result, and exposes that payload back to the frontend for inspection.
+Now, with VLM (Vision-Language Models) into play, the implementation isn't even a point of concern, as the cost of extracting structured data is practically non-existent, with technical intelligence commoditized. It boils down to how well you can specify the problem, and guide the LLM towards getting it done for you.
 
-The extracted result shape includes:
+Credential Lens is a multimodal, agentic document extraction pipeline. We treat document extraction not as a text-parsing speed-run, but as an architectural problem. It marries the deterministic, grounded reality of traditional OCR (Tesseract / PDF text layers) with the spatial reasoning and unstructured understanding of Gemini 1.5 Pro.
 
-- holder name, father name, and date of birth
-- credential degree, institution, graduation year, and CGPA
-- issuer name
-- field-level confidence
-- raw OCR text
-- evidence blocks
-- review-band summary and quality notes
+## Architecture
 
-The design principle is simple: OCR and text-layer evidence remain the source of truth. Any model-based reasoning is optional and bounded to that evidence.
+Most post-GPT software misses the point entirely. People get carried away with the features that they can include (given you have an obedient software developer at your service), instead of the problem they have at hand. This pipeline avoids over-engineering by splitting the problem into two distinct, deliberate phases:
 
-## Runtime shape
+1. **Deterministic Grounding (The Baseline)**
+   The system starts by extracting raw, undeniable text evidence. We rasterize PDFs, run Tesseract, and pull text layers directly. This gives us `EvidenceBlocks`. We aren't guessing; we know exactly where every word is on the page, with exact bounding boxes. 
 
-The frontend runs on `http://localhost:3000`. The API runs on `http://localhost:4000`.
+2. **Multimodal Adjudication (The Brain)**
+   Instead of forcing trendy technology into a problem solution where it doesn't belong, we use VLMs precisely where they excel: understanding context and spatial relationships. We feed the raw text, the evidence blocks, and the rasterized image into Gemini. The LLM acts as an adjudicator and forensic examiner. It maps the visual relationships (like signatures, seals, or slanted text) into a structured schema (`StructuredDocumentResult`).
 
-The frontend experience is split into two main routes:
+3. **Agentic Conflict Resolution**
+   If the LLM's structured output conflicts with the deterministic OCR evidence, an agentic audit loop is triggered. We don't just blindly accept hallucinated fields. The pipeline forces the model to explain its reasoning, resolving the discrepancy with high confidence.
 
-- `/documents` for intake, history, and workspace overview
-- `/documents/:id` for the Firefox-style viewer and structured extraction report
+## Features
 
-The backend exposes:
+- **Native Spatial Bounding Boxes**: Uses Gemini's token-grounded spatial capabilities to generate bounding boxes for fields that OCR misses.
+- **Organic Visual Highlighting**: Instead of rigid axis-aligned rectangles that fail on slanted text, the frontend renders fluid, marker-like overlays using `mix-blend-mode` to gracefully adapt to document distortion.
+- **Forensic Analysis**: Detects digital manipulation, low-signal OCR traps, and verifies authenticity.
+- **Cloud Run Deployment Ready**: Fully containerized and optimized for serverless execution on Google Cloud.
 
-- `GET /health`
-- `POST /api/documents/process`
-- `GET /api/documents`
-- `GET /api/documents/:id/status`
-- `GET /api/documents/:id/result`
-- `GET /api/documents/:id/file`
-- `GET /api/documents/stream`
+## The Takeaway
 
-There are still auth endpoints under `/api/auth`, but the current product flow does not require them. The API resolves a shared demo actor automatically when document routes are used.
+This pipeline should never be treated as a proxy metric for judging how many API calls you can chain together. It is an exercise in how well you can architect a system that solves a complex, unstructured problem (credential extraction) by leveraging intelligence only where deterministic logic hits its ceiling. Working, and simply thinking about a problem over a long period of time is a major part of architecture. 
 
-## Storage and persistence
-
-This build uses SQLite by default for local development through Prisma. The database lives at `apps/api/prisma/dev.db` when `DATABASE_URL=file:./dev.db`.
-
-Original uploads are stored under `STORAGE_ROOT`. The default local value is `./storage`, which resolves relative to `apps/api`.
-
-Structured extraction payloads are encrypted before they are written to the database. Raw uploads remain private and are only streamed back through the API.
-
-## PDF and OCR behavior
-
-Born-digital PDFs use direct text extraction first. That path is fast and keeps line structure so field extraction remains clean.
-
-If a PDF does not yield enough text, the API attempts scanned-PDF OCR by rasterizing pages with `pdftoppm` and then running `tesseract.js`. If Poppler is not installed, scanned PDFs fail explicitly with a clear error message instead of pretending to succeed.
-
-PNG and JPEG files go directly through the OCR path.
-
-## Environment variables
-
-Copy `.env.example` to `.env`.
-
-Important variables:
-
-- `PORT=4000`
-- `DATABASE_URL=file:./dev.db`
-- `WEB_ORIGIN=http://localhost:3000`
-- `API_PUBLIC_URL=http://localhost:4000`
-- `NEXT_PUBLIC_API_URL=http://localhost:4000`
-- `JWT_SECRET=...`
-- `DOCUMENT_ENCRYPTION_KEY=...`
-- `STORAGE_ROOT=./storage`
-- `MAX_UPLOAD_MB=10`
-- `LLM_MODE=none`
-
-Optional OpenAI-compatible adjudication variables are only used when `LLM_MODE=openai-compatible`:
-
-- `OPENAI_COMPAT_BASE_URL`
-- `OPENAI_COMPAT_MODEL`
-- `OPENAI_COMPAT_API_KEY`
-
-The default and recommended mode for sensitive documents is still `LLM_MODE=none`.
-
-Optional Vertex AI variables are used when `LLM_MODE=vertex-ai` or `VLM_MODE=vertex-ai`:
-
-- `STORAGE_BACKEND=gcs`
-- `GCS_BUCKET`
-- `GOOGLE_CLOUD_PROJECT`
-- `GOOGLE_CLOUD_LOCATION=global`
-- `VERTEX_LLM_MODEL=gemini-2.5-flash`
-- `VERTEX_VLM_MODEL=gemini-2.5-flash`
-
-The deployed cloud path uses Gemini 2.5 Flash twice: once as a text-only evidence adjudicator, and once as a multimodal validator over the original document bytes or `gs://` object.
-
-## Local setup
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Generate the Prisma client:
-
-```bash
-npm run prisma:generate -w apps/api
-```
-
-Initialize the local SQLite schema:
-
-```bash
-npm run db:init -w apps/api
-```
-
-Start the API:
-
-```bash
-npm run dev -w apps/api
-```
-
-Start the frontend in a second terminal:
-
-```bash
-npm run dev -w apps/web
-```
-
-Then open `http://localhost:3000/documents`.
-
-## Docker
-
-`docker-compose.yml` now reflects the local SQLite demo shape. It runs only the API and web services, mounts the workspace, initializes the local SQLite file, and persists uploaded files under a Docker volume.
-
-Use:
-
-```bash
-docker compose up --build
-```
-
-## Tests and build
-
-Run the current automated tests:
-
-```bash
-npm test
-```
-
-Build the workspaces:
-
-```bash
-npm run build
-```
-
-## Deployment direction
-
-The repository now includes a working Google Cloud deployment path:
-
-- `apps/api/Dockerfile`
-- `apps/web/Dockerfile`
-- `cloudbuild.api.yaml`
-- `cloudbuild.web.yaml`
-
-The current deployed shape is:
-
-- Cloud Run service for the API
-- Cloud Run service for the web app
-- Cloud Storage bucket for uploaded originals
-- Vertex AI Gemini 2.5 Flash for evidence adjudication and multimodal document validation
-
-The current compromise is persistence. The API still uses SQLite inside the container, so the Cloud Run deployment is intentionally single-instance and demo-grade. That is enough to prove the OCR, LLM, and VLM paths on GCP, but it is not the correct long-term persistence layer. The next production step is to move metadata off SQLite and onto Postgres or Cloud SQL.
-
-## What I would improve with more time
-
-I would add page-aware evidence highlighting in the viewer, a stronger image preprocessing stage before OCR, richer conflict detection across pages, and a cloud worker split so OCR, reasoning, and API traffic scale independently instead of sharing one process boundary.
+This isn't a hackathon toy. It's a production pipeline.

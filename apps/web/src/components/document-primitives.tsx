@@ -125,11 +125,13 @@ export function ExtractionFieldCard(props: {
   label: string;
   field: ExtractionField;
   onHover?: (isHovering: boolean) => void;
+  id?: string;
 }) {
   const confidenceWidth = Math.max(4, Math.min(100, props.field.confidence));
 
   return (
     <article 
+      id={props.id}
       className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4 transition-colors hover:border-[var(--accent-text)]"
       onMouseEnter={() => props.onHover?.(true)}
       onMouseLeave={() => props.onHover?.(false)}

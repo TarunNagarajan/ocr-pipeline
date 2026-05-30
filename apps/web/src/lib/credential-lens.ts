@@ -63,6 +63,7 @@ export interface ExtractionField {
   confidence: number;
   band: ReviewBand;
   evidenceIds: string[];
+  spatialBboxes?: number[][];
   page: number | null;
   sources: ExtractionSource[];
   reasoning: string[];

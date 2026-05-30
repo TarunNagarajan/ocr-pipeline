@@ -11,3 +11,4 @@ storage
 apps/api/prisma/*.db
 apps/api/storage
 .gcloud-sdk-py  
+.gcloud-sdk2/ 
